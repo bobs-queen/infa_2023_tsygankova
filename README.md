@@ -1,2 +1,2 @@
 # infa_2023_tsygankova
-print('popa')
+B02-309.Цыганкова Екатерина
