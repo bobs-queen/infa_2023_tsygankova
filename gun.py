@@ -572,6 +572,8 @@ class KillTarget():
 
         self.live = 5
 
+        self.color = BLACK
+
         self.frozen = 0
 
     def not_hit(self, ball_id, ball_type):
