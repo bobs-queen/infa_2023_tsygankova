@@ -1,6 +1,7 @@
 import math
 from random import choice
 from random import randint
+from random import random
 
 import pygame
 
@@ -35,7 +36,15 @@ K = 0.2
 DY = 50
 DX = 20
 
+SCORE = 0
+
 #описательная часть кода
+
+def draw_heart(screen, x, y, s, color = RED):
+    pygame.draw.polygon(
+    screen, 
+    color, 
+    [[x, y], [x + s, y - s], [x + 2*s, y], [x, y + 2*s], [x - 2*s, y], [x - s, y - s]])
 
 def sign(x):
     if x > 0:
@@ -59,7 +68,18 @@ def speed_loss(vn, vt):
     if delta_vt > abs(vt):
         return(new_vn, 0)
     return(new_vn, sign(vt)*(abs(vt) - delta_vt))
-    
+
+def decision(probability):
+    return random() < probability
+
+def draw_score():
+    global SCORE
+    """
+    отрисовка счета
+    """
+    myfont = pygame.font.Font(None, 32)
+    points = myfont.render(f'Score: {str(SCORE)}', 1, BLACK)
+    screen.blit(points, (30, 30))
 
 
 class Ball:
@@ -73,7 +93,7 @@ class Ball:
         self.screen = screen
         self.x = x
         self.y = y
-        self.r = 10
+        self.r = 8
         self.vx = 0
         self.vy = 0
         self.color = choice(GAME_COLORS)
@@ -91,24 +111,31 @@ class Ball:
 
         # мяч не должен пробивать стены
 
-        if self.y + self.r > HEIGHT - 50:
-            self.y = HEIGHT - 50 - self.r
+        if self.y + self.r > HEIGHT - DY:
+            self.y = HEIGHT - DY - self.r
 
-        if self.x + self.r > WIDTH - 20:
-            self.x = WIDTH - 20 - self.r
+        if self.x + self.r > WIDTH - DX:
+            self.x = WIDTH - DX - self.r
+
+        if self.x - self.r < DX:
+            self.x = DX + self.r
         
         # ускорение
 
         self.vy += ACC
 
         # отражение от правой стенки
-        if self.r + self.x >= WIDTH - 20:
+        if self.r + self.x >= WIDTH - DX:
             self.vx, self.vy = speed_loss(self.vx, self.vy)
 
         #отражение от нижней стенки
         
-        if self.r + self.y >= HEIGHT - 50:
-            self.vy, self.vx = speed_loss(self.vy, self.vx)
+        if self.r + self.y >= HEIGHT - DY:
+            self.vy, self.vx = speed_loss(self.vy, self.vx) 
+
+        #отражение от левой стенки
+        if self.x - self.r <= DX:
+            self.vx, self.vy = speed_loss(self.vx, self.vy)
 
     def draw(self):
         """
@@ -167,12 +194,15 @@ class Gun:
         self.x = x
         self.y = y
         self.width = width
+        self.r = 20
 
         self.tank_w = 30
         self.tank_h = 15
-        self.speed = 5
+        self.speed = 10
 
         self.y -= self.tank_h / 2
+
+        self.live = 10
 
     def fire2_start(self, event):
         """
@@ -191,8 +221,8 @@ class Gun:
         new_ball = Ball(self.screen, x = self.x, y = self.y)
         new_ball.r += 5
         self.an = math.atan2((event.pos[1]-new_ball.y), (event.pos[0]-new_ball.x))
-        new_ball.vx = self.f2_power / 2 * math.cos(self.an)
-        new_ball.vy = self.f2_power / 2 * math.sin(self.an)
+        new_ball.vx =  self.f2_power / 2 * math.cos(self.an)
+        new_ball.vy =  self.f2_power / 2 * math.sin(self.an)
         balls.append(new_ball)
         self.f2_on = 0
         self.f2_power = 10
@@ -251,6 +281,18 @@ class Gun:
         rect = pygame.Rect(self.x - self.tank_w / 2, self.y - self.tank_h / 2, self.tank_w, self.tank_h)
         pygame.draw.rect(self.screen, self.color, rect, width=0, border_radius=3)
      
+    def draw_lifes(self):
+        """
+        отрисовывает количество жизней пушки
+        """
+        size = 5
+        x = 40
+        y = 65
+        for i in range(self.live):
+            draw_heart(self.screen, x + i * size * 5, y, size)
+
+    def hit(self):
+        self.live -= 1
 
     def power_up(self):
         """
@@ -275,33 +317,64 @@ class Gun:
         if self.x >=  WIDTH - (DX + self.tank_w / 2):
             self.x = WIDTH - (DX + self.tank_w / 2)
 
+class Shot(Ball):
+    def __init__(self, screen: pygame.Surface, x=40, y=450):
+        super().__init__(screen, x, y)
+        self.r = 7
+        self.color = BLACK
+    def move(self):
+        self.x += self.vx
+        self.y += self.vy
+
+        # вражеская пуля пропадает после удара о землю
+
+        if self.y + self.r >= HEIGHT - DY:
+            self.live = 0
+
+        if self.x + self.r >= WIDTH - DX:
+            self.live = 0
+        
+        if self.x - self.r <= DX:
+            self.live = 0
+        
+        # ускорение
+
+        self.vy += ACC
+
+        
 class Target:
-    
+    """
+    мишень, двигающаяся по горизонтали
+    """
     def __init__(self, screen):
         self.screen = screen
-        self.color = RED
+        self.color = GREY
         self.points = 0
         self.live = 1
         
-        self.x = randint(600, 780)
-        self.y = randint(300, 550)
-        self.r = randint(2, 50)
+
+        max_r = 20
+        min_r = 10
+        self.r = randint(min_r, max_r)
+        self.x = randint(self.r + DX, WIDTH - self.r - DX)
+        self.y = randint(self.r + DY + 100, self.r + DY + 400)
+
+        self.v = 10
 
     def new_target(self):
         """ Инициализация новой цели. """
-        self.x = randint(600, 780)
-        self.y = randint(300, 550)
-        self.r = randint(2, 50)
-        
-        x = self.x
-        y = self.y
-        r = self.r
-        color = self.color
+        max_r = 20
+        min_r = 10
+        self.r = randint(min_r, max_r)
+        self.x = randint(self.r + DX, WIDTH - self.r - DX)
+        self.y = randint(self.r + DY + 100, self.r + DY + 400)
+
         self.live = 1
 
-    def hit(self, points=1, ):
+    def hit(self):
         """Попадание шарика в цель."""
-        self.points += points
+        global SCORE
+        SCORE += 1
 
 
     def draw(self):
@@ -322,13 +395,175 @@ class Target:
             self.r,
             2
         )
-    def draw_score(self):
+
+    def move(self):
+        self.x += self.v
+
+        if self.x > WIDTH - DX - self.r:
+            self.v = -self.v
+            #self.x = self.x - (WIDTH - DX - self.r)
+        if self.x < DX + self.r:
+            self.v = -self.v
+
+class NonHorTarget(Target):
+    """
+        мишень движется во всем пространстве экрана, отражаясь от стенок
+    """
+    def __init__(self, screen: pygame.Surface):
+        super().__init__(screen)
+        v_max = 10
+        self.vx = randint(-v_max, v_max)
+        self.vy = randint(-v_max, v_max)
+
+    def new_target(self):
+        """ Инициализация новой цели. """
+        max_r = 20
+        min_r = 10
+        self.r = randint(min_r, max_r)
+        self.x = randint(self.r + DX, WIDTH - self.r - DX)
+        self.y = randint(self.r + DY + 100, self.r + DY + 400)
+
+        v_max = 10
+        self.vx = randint(-v_max, v_max)
+        self.vy = randint(-v_max, v_max)
+
+        self.live = 1
+
+    def move(self):
+        self.x += self.vx
+        self.y += self.vy
+
+        ceil = 50
+        # мишень не должна пробивать стены
+
+        if self.y + self.r > HEIGHT - DY - ceil:
+            self.y = HEIGHT - DY - self.r - ceil
+
+        if self.x + self.r > WIDTH - DX:
+            self.x = WIDTH - DX - self.r
+
+        if self.x - self.r < DX:
+            self.x = DX + self.r
+        
+        if self.y - self.r < DY + ceil:
+            self.y = DY + self.r + ceil
+        
+
+        # отражение от правой и левой стенок
+        if self.r + self.x >= WIDTH - DX or self.x - self.r <= DX:
+            self.vx = -self.vx
+
+        #отражение от нижней и верхней стенок
+        
+        if self.r + self.y >= HEIGHT - DY - ceil or self.y - self.r <= DY + ceil:
+            self.vy = -self.vy
+
+
+class KillTarget():
+
+    """
+    мишень гоняется за танком и в рандомные моменты времени выстреливает по ходу своего движения
+    """
+
+    def __init__(self, screen):
+        self.screen = screen
+        self.color = BLACK
+        self.live = 5
+        self.r = 10
+        self.vx = 0
+
+        self.hitted = 0
+        self.ball_hit = 0
+        
+
+        self.length = 40
+        self.width = 10
+        self.x = randint(self.length / 2 + DX, WIDTH - self.length / 2 - DX)
+        self.y = randint(self.width / 2 + DY + 50, self.width / 2 + DY + 200)
+
+        self.v = 3
+
+    def new_target(self):
+        """ Инициализация новой цели. """
+
+        self.x = randint(self.length / 2 + DX, WIDTH - self.length / 2 - DX)
+        self.y = randint(self.width / 2 + DY + 50, self.width / 2 + DY + 200)
+
+        self.live = 5
+
+    def not_hit(self, ball_id):
+        if self.ball_hit == ball_id:
+            self.hitted = 0
+            self.color = BLACK
+
+    def hit(self, ball_id):
+        """Попадание шарика в цель."""
+        global SCORE
+        if self.hitted:
+            return False
+        else:
+            self.hitted = 1
+            self.ball_hit = ball_id
+            self.color = RED
+            if self.live > 1:
+                self.live -= 1
+                return False
+            else:
+                SCORE += 5
+                return True
+
+
+    def draw(self):
         """
-        отрисовка счета
+        отрисовка мишени
         """
+        pygame.draw.line(
+            self.screen,
+            self.color,
+            [self.x - self.length / 2, self.y],
+            [self.x + self.length / 2, self.y],
+            width = self.width
+        )
+
+        pygame.draw.line(
+            self.screen,
+            self.color,
+            [self.x, self.y],
+            [self.x, self.y + self.length / 2],
+            width = self.width
+        )
+
+        pygame.draw.circle(
+            self.screen,
+            self.color,
+            (self.x, self.y),
+            self.r
+        )
+
         myfont = pygame.font.Font(None, 32)
-        points = myfont.render(str(self.points), 1, BLACK)
-        screen.blit(points, (30, 30))
+        lifes = myfont.render(str(self.live), 1, BLACK)
+        screen.blit(lifes, lifes.get_rect(center = (self.x, self.y - 20)))
+
+    def move(self, obj):
+        self.vx = (obj.x - self.x) * self.v / 100
+        self.x += self.vx
+
+    def shoot(self):
+        if self.vx < 3:
+            prob = 1/2/FPS
+        else:
+            prob = 2/FPS
+        if decision(1/FPS):
+            global shots
+            if abs(self.vx) > 3:
+                new_shot = Shot(self.screen, x = self.x + sign(self.vx) * self.length / 2, y = self.y)
+            else:
+                new_shot = Shot(self.screen, x = self.x, y = self.y + self.length / 2)
+            new_shot.vx =  self.vx *2
+            new_shot.vy =  0
+            shots.append(new_shot)
+        
+
 
 #исполнительная часть кода
 
@@ -337,22 +572,38 @@ if __name__ == '__main__':
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     bullet = 0
     balls = []
+    shots = []
 
     clock = pygame.time.Clock()
     gun = Gun(screen)
-    target = Target(screen)
+    target1 = Target(screen)
+    target2 = NonHorTarget(screen)
+    killtarget = KillTarget(screen)
     finished = False
 
     while not finished:
 
         #отрисовка кадра
+
         screen.fill(WHITE)
         gun.draw()
-        target.draw()
-        target.draw_score()
+        gun.draw_lifes()
+
+        target1.draw()
+        target2.draw()
+        killtarget.draw()
+
+        draw_score()
         for b in balls:
             if b.do_live():
                 b.draw()
+        for s in shots:
+            if s.live:
+                s.draw()
+
+        target1.move()
+        target2.move()
+        killtarget.move(gun)
         pygame.display.update()
 
         clock.tick(FPS)
@@ -383,17 +634,28 @@ if __name__ == '__main__':
         #движение шаров и проверка попадания в цель 
         for b in balls:
             b.move()
-            if b.hittest(target) and target.live:
-                target.live = 0
-                target.hit()
-                target.new_target()
 
+            if b.hittest(target1) and target1.live:
+                target1.live = 0
+                target1.hit()
+                target1.new_target()
+            if b.hittest(target2) and target2.live:
+                target2.live = 0
+                target2.hit()
+                target2.new_target()
+            
+            if b.hittest(killtarget):
+                if killtarget.hit(id(b)):
+                    killtarget.new_target()
+            else:
+                killtarget.not_hit(id(b))
+            """
                 #отрисовка экрана победы n секунд
                 n = 3
                 for i in range(n*FPS):
                     screen.fill(WHITE)
                     gun.draw()
-                    target.draw_score()
+                    target1.draw_score()
                     myfont = pygame.font.Font(None, 32)
                     if len(balls) == 1:
                         points = myfont.render(f'You hit the target in 1 shot', 1, BLACK)
@@ -424,6 +686,14 @@ if __name__ == '__main__':
                     if finished:
                         break
                 balls = []
+            """
+        for s in shots:
+            s.move()
+            if s.hittest(gun):
+                gun.hit()
+                print(gun.live)
         gun.power_up()
+        killtarget.shoot()
+
 
     pygame.quit()
