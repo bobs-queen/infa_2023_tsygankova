@@ -5,12 +5,15 @@ from random import random
 
 import pygame
 
+LIVE = 10
 
 FPS = 30
 
 RED = 0xFF0000
-BLUE = 0x0000FF
+BLUE = 0x6495ED
+DARKBLUE = 0x0000CD
 YELLOW = 0xFFC91F
+ORANGE = 0xFF8C00
 GREEN = 0x00FF00
 MAGENTA = 0xFF03B8
 CYAN = 0x00FFCC
@@ -38,7 +41,42 @@ DX = 20
 
 SCORE = 0
 
+begginingtext =  "Цель игры заработать как можно больше очков, сбивая вражеские мишени. \n \n" \
+"   Типы мишеней в игре:\n"\
+"Серые шары- движутся независимо от положения вашего танка. При попадании дают +1 очко\n"\
+"Вражеская пушка - преследует ваш танк и стреляет по нему. У пушки пять жизней, её уничтожение дает +5 очков\n"\
+"Не стойте на месте! Когда вражеская пушка приближается, она начинает стрелять чаще.\n \n"\
+"   Для уничтожения мишеней вам предстоит управлять танком: его перемещенем и стрельбой. \n"\
+"Перемещение производится кнопками: D - впрво, A - влево.\n"\
+"Выстрелы: ПРАВАЯ и ЛЕВАЯ КНОПКИ МЫШИ для двух типов снарядов.\n"\
+"   Типы ваших снарядов:\n"\
+"ПРАВАЯ КНОПКА МЫШИ - обычный шар\n"\
+"ЛЕВАЯ КНОПКА МЫШИ - магический шар, который замораживает вражескую пушку при попадании так, что она не может двигаться и стрелять. \n" \
+"Магический шар -- мощное оружие, поэтому он стоит 3 очка \n \n" \
+"   Чем больше у вас очков, тем вражеская пушка стреляет чаще и двигается быстрее\n \n" \
+"   Игра не бесконечная, у вас есть ограниченое количество жизней, которых первоначально " + str(LIVE) + " штук.\n"\
+"С их окончанием приходит и окончание игры\n"\
+"Жизни вы теряете, когда попадаете под обстрел вражеской пушки\n \n"\
+"                                                На этом правила заканчиваются. Хорошей игры.\n"\
+"                                                             Нажмите любую кнопку, чтобы продолжить.\n"\
 #описательная часть кода
+
+def blit_text(surface, text, pos, font, color = BLACK):
+    words = [word.split(' ') for word in text.splitlines()] 
+    space = font.size(' ')[0]
+    max_width, max_height = surface.get_size()
+    x, y = pos
+    for line in words:
+        for word in line:
+            word_surface = font.render(word, True, color)
+            word_width, word_height = word_surface.get_size()
+            if x + word_width >= max_width:
+                x = pos[0]
+                y += word_height 
+            surface.blit(word_surface, (x, y))
+            x += word_width + space
+        x = pos[0]
+        y += word_height
 
 def draw_heart(screen, x, y, s, color = RED):
     pygame.draw.polygon(
@@ -77,8 +115,8 @@ def draw_score():
     """
     отрисовка счета
     """
-    myfont = pygame.font.Font(None, 32)
-    points = myfont.render(f'Score: {str(SCORE)}', 1, BLACK)
+    myfont = pygame.font.SysFont(None, 32)
+    points = myfont.render(f'Счет: {str(SCORE)}', 1, BLACK)
     screen.blit(points, (30, 30))
 
 
@@ -96,8 +134,11 @@ class Ball:
         self.r = 8
         self.vx = 0
         self.vy = 0
-        self.color = choice(GAME_COLORS)
+        self.color = YELLOW
         self.live = FPS
+        self.edge_color = ORANGE
+
+        self.type = 1
 
     def move(self):
         """Переместить мяч по прошествии единицы времени.
@@ -150,7 +191,7 @@ class Ball:
         # edge
         pygame.draw.circle(
             self.screen,
-            BLACK,
+            self.edge_color,
             (self.x, self.y),
             self.r,
             2
@@ -183,9 +224,23 @@ class Ball:
             return True
         return False
 
+class FrozyBall(Ball):
+    def __init__(self, screen: pygame.Surface, x=40, y=450):
+        super().__init__(screen, x, y)
+        self.color = BLUE
+        self.edge_color = DARKBLUE
+        self.type = 2
+
+        self.frozen = 1
+    def not_frozen(self):
+        self.frozen = 0
+        self.color = YELLOW
+        self.edge_color = ORANGE
 
 class Gun:
     def __init__(self, screen, x = 40, y = HEIGHT - 50, width = 7):
+        global LIVE
+
         self.screen = screen
         self.f2_power = 10
         self.f2_on = 0
@@ -202,13 +257,15 @@ class Gun:
 
         self.y -= self.tank_h / 2
 
-        self.live = 10
+        self.live = LIVE
 
-    def fire2_start(self, event):
+
+    def fire2_start(self, type):
         """
         метод делает пушку активной
         """
-        self.f2_on = 1
+        self.f2_on = type
+
 
     def fire2_end(self, event):
         """Выстрел мячом.
@@ -216,9 +273,15 @@ class Gun:
         Происходит при отпускании кнопки мыши.
         Начальные значения компонент скорости мяча vx и vy зависят от положения мыши.
         """
-        global balls, bullet
+        global balls, bullet, SCORE
         bullet += 1
-        new_ball = Ball(self.screen, x = self.x, y = self.y)
+        if self.f2_on == 1:
+            new_ball = Ball(self.screen, x = self.x, y = self.y)
+        if self.f2_on == 2:
+            if SCORE < 3:
+                return
+            new_ball = FrozyBall(self.screen, x = self.x, y = self.y)
+            SCORE -= 3
         new_ball.r += 5
         self.an = math.atan2((event.pos[1]-new_ball.y), (event.pos[0]-new_ball.x))
         new_ball.vx =  self.f2_power / 2 * math.cos(self.an)
@@ -298,12 +361,19 @@ class Gun:
         """
         Метод усиливает пушку
         """
+        global SCORE
         if self.f2_on:
-            if self.f2_power < 100:
-                self.f2_power += 1
-            self.color = RED
+            if self.f2_on == 1:
+                self.color = ORANGE
+                if self.f2_power < 100:
+                    self.f2_power += 1
+            if self.f2_on == 2 and SCORE > 3:
+                self.color = DARKBLUE
+                if self.f2_power < 100:
+                    self.f2_power += 1
         else:
-            self.color = GREY
+            if self.color == ORANGE or self.color == DARKBLUE:
+                self.color = GREY
 
     def move(self, direction):
         """
@@ -316,6 +386,9 @@ class Gun:
             self.x = DX + self.tank_w / 2
         if self.x >=  WIDTH - (DX + self.tank_w / 2):
             self.x = WIDTH - (DX + self.tank_w / 2)
+
+    def color_change(self, color):
+        self.color = color
 
 class Shot(Ball):
     def __init__(self, screen: pygame.Surface, x=40, y=450):
@@ -482,6 +555,7 @@ class KillTarget():
         self.y = randint(self.width / 2 + DY + 50, self.width / 2 + DY + 200)
 
         self.v = 3
+        self.frozen = 0
 
     def new_target(self):
         """ Инициализация новой цели. """
@@ -491,12 +565,16 @@ class KillTarget():
 
         self.live = 5
 
-    def not_hit(self, ball_id):
+        self.frozen = 0
+
+    def not_hit(self, ball_id, ball_type):
         if self.ball_hit == ball_id:
             self.hitted = 0
             self.color = BLACK
+            if ball_type == 2 or self.frozen:
+                self.color = DARKBLUE
 
-    def hit(self, ball_id):
+    def hit(self, ball_id, ball_type):
         """Попадание шарика в цель."""
         global SCORE
         if self.hitted:
@@ -504,7 +582,11 @@ class KillTarget():
         else:
             self.hitted = 1
             self.ball_hit = ball_id
-            self.color = RED
+            if ball_type == 1:
+                self.color = RED
+            if ball_type == 2:
+                self.color = DARKBLUE
+                self.frozen = 1
             if self.live > 1:
                 self.live -= 1
                 return False
@@ -540,34 +622,48 @@ class KillTarget():
             self.r
         )
 
-        myfont = pygame.font.Font(None, 32)
+        myfont = pygame.font.SysFont(None, 32)
         lifes = myfont.render(str(self.live), 1, BLACK)
         screen.blit(lifes, lifes.get_rect(center = (self.x, self.y - 20)))
 
     def move(self, obj):
-        self.vx = (obj.x - self.x) * self.v / 100
-        self.x += self.vx
+        if not self.frozen:
+            self.vx = (obj.x - self.x) * self.v / 100
+            self.x += self.vx
 
-    def shoot(self):
-        if self.vx < 3:
-            prob = 1/2/FPS
-        else:
-            prob = 2/FPS
-        if decision(1/FPS):
-            global shots
-            if abs(self.vx) > 3:
-                new_shot = Shot(self.screen, x = self.x + sign(self.vx) * self.length / 2, y = self.y)
+    def shoot(self, obj):
+        if not self.frozen:
+            if abs(self.x - obj.x) < 30:
+                prob = SCORE/FPS
             else:
-                new_shot = Shot(self.screen, x = self.x, y = self.y + self.length / 2)
-            new_shot.vx =  self.vx *2
-            new_shot.vy =  0
-            shots.append(new_shot)
+                prob = SCORE/3/FPS
+            if decision(prob):
+                global shots
+                if abs(self.vx) > 3:
+                    new_shot = Shot(self.screen, x = self.x + sign(self.vx) * self.length / 2, y = self.y)
+                else:
+                    new_shot = Shot(self.screen, x = self.x, y = self.y + self.length / 2)
+                new_shot.vx =  self.vx *2
+                new_shot.vy =  0
+                shots.append(new_shot)
+    def change_speed(self):
+        global SCORE
+        v = 3 + SCORE / 3
         
 
 
 #исполнительная часть кода
 
 if __name__ == '__main__':
+
+    game = 0.5
+
+    hit_time = 0
+    hitted = 0
+
+    no_score_time = 0
+    no_score = 0
+
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     bullet = 0
@@ -582,118 +678,155 @@ if __name__ == '__main__':
     finished = False
 
     while not finished:
+        if game == 0.5:
+            screen.fill(WHITE)
+            font8 = pygame.font.SysFont("Georgia", 35)
+            img8 = font8.render('Добро пожаловать в игру "Пушка"', True, BLACK)
+            screen.blit(img8, (WIDTH / 2 - img8.get_width() / 2, HEIGHT * 0.05))
+            font10 = pygame.font.SysFont("Georgia", 25)
+            img10 = font10.render('Ее правила просты:', True, BLACK)
+            screen.blit(img10, (WIDTH / 2 - img10.get_width() / 2, HEIGHT*0.12))
+            font9 = pygame.font.SysFont("Georgia", 15)
+            blit_text(screen, begginingtext, (WIDTH*0.02, HEIGHT*0.2), font9)
 
-        #отрисовка кадра
+            pygame.display.update()
 
-        screen.fill(WHITE)
-        gun.draw()
-        gun.draw_lifes()
+            for event in pygame.event.get():                               
+                if event.type == pygame.QUIT:
+                    finished = True
+                if event.type == pygame.KEYDOWN:
+                    game = 1
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    game = 1
+        elif game == 1:
+            #отрисовка кадра
 
-        target1.draw()
-        target2.draw()
-        killtarget.draw()
+            screen.fill(WHITE)
+            gun.draw()
+            gun.draw_lifes()
 
-        draw_score()
-        for b in balls:
-            if b.do_live():
-                b.draw()
-        for s in shots:
-            if s.live:
-                s.draw()
+            target1.draw()
+            target2.draw()
+            killtarget.draw()
 
-        target1.move()
-        target2.move()
-        killtarget.move(gun)
-        pygame.display.update()
+            draw_score()
+            for b in balls:
+                if b.do_live():
+                    b.draw()
+            for s in shots:
+                if s.live:
+                    s.draw()
 
-        clock.tick(FPS)
+            target1.move()
+            target2.move()
+            killtarget.move(gun)
 
-        #проверка событий
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                finished = True
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                gun.fire2_start(event)
-            elif event.type == pygame.MOUSEBUTTONUP:
-                gun.fire2_end(event)
-                gun.targetting(event)
-            elif event.type == pygame.MOUSEMOTION:
-                gun.targetting(event)
-
-        # проверка клавиш
-
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_d]:
-            gun.move(1)
-        elif keys[pygame.K_a]:
-            gun.move(-1)
-        else:
-            gun.move(0)
-    
-
-        #движение шаров и проверка попадания в цель 
-        for b in balls:
-            b.move()
-
-            if b.hittest(target1) and target1.live:
-                target1.live = 0
-                target1.hit()
-                target1.new_target()
-            if b.hittest(target2) and target2.live:
-                target2.live = 0
-                target2.hit()
-                target2.new_target()
-            
-            if b.hittest(killtarget):
-                if killtarget.hit(id(b)):
-                    killtarget.new_target()
+            # Вас ранили
+            if pygame.time.get_ticks() - hit_time < 1000 and hitted:
+                font = pygame.font.SysFont(None, 40)
+                m = int(100 + (pygame.time.get_ticks() - hit_time)/1000 * 150)
+                color = (250, m, m)
+                n = int((pygame.time.get_ticks() - hit_time)/1000 * 125)
+                gun_color = (250 - n, n, n)
+                gun.color_change(gun_color)
+                img1 = font.render('Вас ранили', True, color)
+                screen.blit(img1, (WIDTH / 2 - img1.get_width() / 2, HEIGHT / 2 - img1.get_height() / 2))
             else:
-                killtarget.not_hit(id(b))
-            """
-                #отрисовка экрана победы n секунд
-                n = 3
-                for i in range(n*FPS):
-                    screen.fill(WHITE)
-                    gun.draw()
-                    target1.draw_score()
-                    myfont = pygame.font.Font(None, 32)
-                    if len(balls) == 1:
-                        points = myfont.render(f'You hit the target in 1 shot', 1, BLACK)
-                    else:
-                        points = myfont.render(f'You hit the target in {len(balls)} shots', 1, BLACK)
-                    screen.blit(points, (WIDTH / 2 - points.get_width() / 2, HEIGHT / 2 - points.get_height() / 2))
-                    for b in balls:
-                        if b.do_live():
-                            b.draw()
-                    pygame.display.update()
+                gun.color_change(GREY)
 
-                    clock.tick(FPS)
-                    for event in pygame.event.get():
-                        if event.type == pygame.QUIT:
-                            finished = True
-                        elif event.type == pygame.MOUSEMOTION:
-                            gun.targetting(event)
+            #Недостаточно очков
+            
+            if pygame.time.get_ticks() - no_score_time < 1000 and no_score:
+                font = pygame.font.SysFont(None, 40)
+                m = int(100 + (pygame.time.get_ticks() - no_score_time)/1000 * 150)
+                color = (250, m, m)
+                img2 = font.render('Недостаточно очков', True, color)
+                screen.blit(img2, (WIDTH / 2 - img2.get_width() / 2, HEIGHT / 2 - img2.get_height() / 2))
 
-                    keys = pygame.key.get_pressed()
-                    if keys[pygame.K_d]:
-                        gun.move(1)
-                    elif keys[pygame.K_a]:
-                        gun.move(-1)
-                    else:
-                        gun.move(0)
-                    for b in balls:
-                        b.move()
-                    if finished:
-                        break
-                balls = []
-            """
-        for s in shots:
-            s.move()
-            if s.hittest(gun):
-                gun.hit()
-                print(gun.live)
-        gun.power_up()
-        killtarget.shoot()
+            pygame.display.update()
 
+            clock.tick(FPS)
 
+            #проверка событий
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    finished = True
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    left, middle, right = pygame.mouse.get_pressed()
+                    if left:
+                        gun.fire2_start(1)
+                    if right:
+                        if SCORE < 3:
+                            no_score = 1
+                            no_score_time = pygame.time.get_ticks()
+                        gun.fire2_start(2)
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    gun.fire2_end(event)
+                    gun.targetting(event)
+                elif event.type == pygame.MOUSEMOTION:
+                    gun.targetting(event)
+
+            # проверка клавиш
+
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_d]:
+                gun.move(1)
+            elif keys[pygame.K_a]:
+                gun.move(-1)
+            else:
+                gun.move(0)
+        
+
+            #движение шаров и проверка попадания в цель 
+            for b in balls:
+                b.move()
+
+                if b.hittest(target1) and target1.live:
+                    target1.live = 0
+                    target1.hit()
+                    target1.new_target()
+                if b.hittest(target2) and target2.live:
+                    target2.live = 0
+                    target2.hit()
+                    target2.new_target()
+                
+                if b.hittest(killtarget):
+                    if killtarget.hit(id(b), b.type):
+                        killtarget.new_target()
+                else:
+                    killtarget.not_hit(id(b), b.type)
+            
+            #движение ядер и проверка попадания в пушку
+
+            for s in shots:
+                s.move()
+                if s.hittest(gun):
+                    gun.hit()
+                    if gun.live == 0:
+                        game = 0
+                    hit_time = pygame.time.get_ticks()
+                    hitted = 1
+            
+            gun.power_up()
+            killtarget.shoot(gun)
+            killtarget.change_speed()
+
+        else:  
+            screen.fill(BLACK)
+            font4 = pygame.font.SysFont("Georgia", 60)
+            img4 = font4.render('Игра окончена', True, (255, 0, 0))
+            screen.blit(img4, (WIDTH / 2 - img4.get_width() / 2, HEIGHT*0.4))
+            font5 = pygame.font.SysFont("Georgia", 24)
+            img5 = font5.render('Ваш счёт:  ' + str(SCORE), False, (255, 0, 0))
+            screen.blit(img5, (WIDTH / 2 - img5.get_width() / 2, HEIGHT * 0.6))
+
+            pygame.display.update()    
+
+            for event in pygame.event.get():                               
+                if event.type == pygame.QUIT:
+                    finished = True
+                if event.type == pygame.KEYDOWN:
+                    finished = True
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    finished = True
     pygame.quit()
