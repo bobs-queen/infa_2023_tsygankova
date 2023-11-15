@@ -30,6 +30,11 @@ REC = 0.6
 #коэффициент трения
 K = 0.2
 
+# отступы стен от краев
+
+DY = 50
+DX = 20
+
 #описательная часть кода
 
 def sign(x):
@@ -153,7 +158,7 @@ class Ball:
 
 
 class Gun:
-    def __init__(self, screen, x = 40, y = 450, width = 7):
+    def __init__(self, screen, x = 40, y = HEIGHT - 50, width = 7):
         self.screen = screen
         self.f2_power = 10
         self.f2_on = 0
@@ -162,6 +167,12 @@ class Gun:
         self.x = x
         self.y = y
         self.width = width
+
+        self.tank_w = 30
+        self.tank_h = 15
+        self.speed = 5
+
+        self.y -= self.tank_h / 2
 
     def fire2_start(self, event):
         """
@@ -177,7 +188,7 @@ class Gun:
         """
         global balls, bullet
         bullet += 1
-        new_ball = Ball(self.screen)
+        new_ball = Ball(self.screen, x = self.x, y = self.y)
         new_ball.r += 5
         self.an = math.atan2((event.pos[1]-new_ball.y), (event.pos[0]-new_ball.x))
         new_ball.vx = self.f2_power / 2 * math.cos(self.an)
@@ -187,18 +198,24 @@ class Gun:
         self.f2_power = 10
 
     def targetting(self, event):
-        """Прицеливание. Зависит от положения мыши."""
+        """
+        Прицеливание. Зависит от положения мыши.
+        """
+
         if event:
-            if event.pos[0] <= 20:
-                self.an = - sign (event.pos[1]-450) *math.pi / 2
+            if event.pos[0] == self.x:
+                self.an = - sign (event.pos[1]-self.y) *math.pi / 2
+            elif event.pos[0] < self.x:
+                self.an = math.pi + math.atan(-(event.pos[1]-self.y) / (event.pos[0]-self.x))
             else:
-                self.an = math.atan(-(event.pos[1]-450) / (event.pos[0]-20))
+                self.an = math.atan(-(event.pos[1]-self.y) / (event.pos[0]-self.x))
         if self.f2_on:
             self.color = RED
         else:
             self.color = GREY
 
     def draw(self):
+
         """
         Рисует пушку, направленную к курсору
         """
@@ -229,6 +246,10 @@ class Gun:
             (bottom_right_x, bottom_right_y),
             (bottom_left_x, bottom_left_y)
         ])
+
+
+        rect = pygame.Rect(self.x - self.tank_w / 2, self.y - self.tank_h / 2, self.tank_w, self.tank_h)
+        pygame.draw.rect(self.screen, self.color, rect, width=0, border_radius=3)
      
 
     def power_up(self):
@@ -242,6 +263,17 @@ class Gun:
         else:
             self.color = GREY
 
+    def move(self, direction):
+        """
+        Движение пушки
+        -1 - влево, 1 - вправо, 0 - никуда
+        """
+        self.x += direction*self.speed
+
+        if self.x <=  DX + self.tank_w / 2:
+            self.x = DX + self.tank_w / 2
+        if self.x >=  WIDTH - (DX + self.tank_w / 2):
+            self.x = WIDTH - (DX + self.tank_w / 2)
 
 class Target:
     
@@ -337,6 +369,17 @@ if __name__ == '__main__':
             elif event.type == pygame.MOUSEMOTION:
                 gun.targetting(event)
 
+        # проверка клавиш
+
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_d]:
+            gun.move(1)
+        elif keys[pygame.K_a]:
+            gun.move(-1)
+        else:
+            gun.move(0)
+    
+
         #движение шаров и проверка попадания в цель 
         for b in balls:
             b.move()
@@ -368,6 +411,14 @@ if __name__ == '__main__':
                             finished = True
                         elif event.type == pygame.MOUSEMOTION:
                             gun.targetting(event)
+
+                    keys = pygame.key.get_pressed()
+                    if keys[pygame.K_d]:
+                        gun.move(1)
+                    elif keys[pygame.K_a]:
+                        gun.move(-1)
+                    else:
+                        gun.move(0)
                     for b in balls:
                         b.move()
                     if finished:
