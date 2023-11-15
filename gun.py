@@ -275,13 +275,13 @@ class Gun:
         """
         global balls, bullet, SCORE
         bullet += 1
-        if self.f2_on == 1:
-            new_ball = Ball(self.screen, x = self.x, y = self.y)
         if self.f2_on == 2:
             if SCORE < 3:
                 return
             new_ball = FrozyBall(self.screen, x = self.x, y = self.y)
             SCORE -= 3
+        else:
+            new_ball = Ball(self.screen, x = self.x, y = self.y)
         new_ball.r += 5
         self.an = math.atan2((event.pos[1]-new_ball.y), (event.pos[0]-new_ball.x))
         new_ball.vx =  self.f2_power / 2 * math.cos(self.an)
