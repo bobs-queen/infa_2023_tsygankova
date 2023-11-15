@@ -44,7 +44,7 @@ SCORE = 0
 begginingtext =  "Цель игры заработать как можно больше очков, сбивая вражеские мишени. \n \n" \
 "   Типы мишеней в игре:\n"\
 "Серые шары- движутся независимо от положения вашего танка. При попадании дают +1 очко\n"\
-"Вражеская пушка - преследует ваш танк и стреляет по нему. У пушки пять жизней, её уничтожение дает +5 очков\n"\
+"Вражеская пушка - преследует ваш танк и стреляет по нему. У пушки пять жизней, её уничтожение дает +5 очков и +3 жизни\n"\
 "Не стойте на месте! Когда вражеская пушка приближается, она начинает стрелять чаще.\n \n"\
 "   Для уничтожения мишеней вам предстоит управлять танком: его перемещенем и стрельбой. \n"\
 "Перемещение производится кнопками: D - впрво, A - влево.\n"\
@@ -353,6 +353,12 @@ class Gun:
         y = 65
         for i in range(self.live):
             draw_heart(self.screen, x + i * size * 5, y, size)
+    
+    def life_add(self, n):
+        if self.live + n >= 10:
+            self.live = 10
+        else:
+            self.live += n
 
     def hit(self):
         self.live -= 1
@@ -793,6 +799,7 @@ if __name__ == '__main__':
                 if b.hittest(killtarget):
                     if killtarget.hit(id(b), b.type):
                         killtarget.new_target()
+                        gun.life_add(3)
                 else:
                     killtarget.not_hit(id(b), b.type)
             
@@ -804,6 +811,7 @@ if __name__ == '__main__':
                     gun.hit()
                     if gun.live == 0:
                         game = 0
+
                     hit_time = pygame.time.get_ticks()
                     hitted = 1
             
@@ -819,14 +827,38 @@ if __name__ == '__main__':
             font5 = pygame.font.SysFont("Georgia", 24)
             img5 = font5.render('Ваш счёт:  ' + str(SCORE), False, (255, 0, 0))
             screen.blit(img5, (WIDTH / 2 - img5.get_width() / 2, HEIGHT * 0.6))
+            img6 = font5.render('Нажмите любую кнопку, чтобы начать заново', False, (255, 0, 0))
+            screen.blit(img6, (WIDTH / 2 - img6.get_width() / 2, HEIGHT * 0.8))
 
             pygame.display.update()    
 
             for event in pygame.event.get():                               
                 if event.type == pygame.QUIT:
                     finished = True
-                if event.type == pygame.KEYDOWN:
-                    finished = True
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    finished = True
+                if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+                    game = 1
+                    pygame.quit()
+
+                    SCORE = 0
+
+                    hit_time = 0
+                    hitted = 0
+
+                    no_score_time = 0
+                    no_score = 0
+
+                    pygame.init()
+                    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+                    bullet = 0
+                    balls = []
+                    shots = []
+
+                    clock = pygame.time.Clock()
+                    gun = Gun(screen)
+                    target1 = Target(screen)
+                    target2 = NonHorTarget(screen)
+                    killtarget = KillTarget(screen)
+                    finished = False
+
+
     pygame.quit()
