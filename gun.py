@@ -6,6 +6,7 @@ from random import random
 import pygame
 
 LIVE = 10
+HARD = 10
 
 FPS = 30
 
@@ -638,11 +639,12 @@ class KillTarget():
             self.x += self.vx
 
     def shoot(self, obj):
+        global SCORE, HARD
         if not self.frozen:
             if abs(self.x - obj.x) < 30:
-                prob = SCORE/FPS
+                prob = SCORE * HARD / 10 /FPS
             else:
-                prob = SCORE/3/FPS
+                prob = SCORE * HARD / 30 /FPS
             if decision(prob):
                 global shots
                 if abs(self.vx) > 3:
@@ -653,8 +655,8 @@ class KillTarget():
                 new_shot.vy =  0
                 shots.append(new_shot)
     def change_speed(self):
-        global SCORE
-        v = 3 + SCORE / 3
+        global SCORE, HARD
+        v = 3 + SCORE* HARD / 30
         
 
 
